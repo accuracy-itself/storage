@@ -35,12 +35,13 @@ namespace Storage
                 if (length >= 0)
                 {
                     string filePath = localPath.Substring(0, length);
-                    if (!Directory.Exists(filePath))
+
+                    if (!Directory.Exists(filePath) && (!File.Exists(filePath)))
                     {
                         Directory.CreateDirectory(filePath);
                     }
 
-                    if (Directory.Exists(localPath))
+                    if (Directory.Exists(localPath) || File.Exists(filePath))
                     {
                         bad = true;
                     }
@@ -60,12 +61,12 @@ namespace Storage
                 }
             }
 
-            if(bad)
+            if (bad)
             {
                 httpResponse.StatusCode = 400;
                 using (var output = httpResponse.OutputStream)
                 {
-                    byte[] buffer = Encoding.ASCII.GetBytes("400 Bad Request");
+                    byte[] buffer = Encoding.ASCII.GetBytes("400 Bad Request\n");
                     output.Write(buffer, 0, buffer.Length);
                 }
             }
@@ -81,41 +82,41 @@ namespace Storage
             {
                 bad = true;
             }
-
-            FileInfo file = new FileInfo(localPath);
-            if (file.Exists)
-            {
-                using (var output = httpResponse.OutputStream)
-                {
-                    httpResponse.ContentLength64 = file.Length;
-                    byte[] buffer = File.ReadAllBytes(localPath);
-                    output.Write(buffer, 0, buffer.Length);
-                }
-            }
-            else if (Directory.Exists(localPath))
-            {
-                string[] dirs = Directory.GetDirectories(localPath);
-                string[] files = Directory.GetFiles(localPath);
-                var jsonInfo = JsonConvert.SerializeObject(files);
-                var jsonInfoDirs = JsonConvert.SerializeObject(dirs);
-
-                using (var output = httpResponse.OutputStream)
-                {
-                    var buffer = Encoding.ASCII.GetBytes(jsonInfo + '\n' + jsonInfoDirs);
-                    output.Write(buffer, 0, buffer.Length);
-                }
-            }
             else
             {
-                bad = true;
-            }
+                FileInfo file = new FileInfo(localPath);
+                if (file.Exists)
+                {
+                    using (var output = httpResponse.OutputStream)
+                    {
+                        byte[] buffer = File.ReadAllBytes(localPath);
+                        output.Write(buffer, 0, buffer.Length);
+                    }
+                }
+                else if (Directory.Exists(localPath))
+                {
+                    string[] dirs = Directory.GetDirectories(localPath);
+                    string[] files = Directory.GetFiles(localPath);
+                    var jsonInfo = JsonConvert.SerializeObject(files);
+                    var jsonInfoDirs = JsonConvert.SerializeObject(dirs);
 
-            if(bad)
+                    using (var output = httpResponse.OutputStream)
+                    {
+                        var buffer = Encoding.ASCII.GetBytes(jsonInfo + '\n' + jsonInfoDirs + '\n');
+                        output.Write(buffer, 0, buffer.Length);
+                    }
+                }
+                else
+                {
+                    bad = true;
+                }
+            }
+            if (bad)
             {
                 httpResponse.StatusCode = 404;
                 using (var output = httpResponse.OutputStream)
                 {
-                    byte[] buffer = Encoding.ASCII.GetBytes("404 Not Found");
+                    byte[] buffer = Encoding.ASCII.GetBytes("404 Not Found \n");
                     output.Write(buffer, 0, buffer.Length);
                 }
             }
@@ -133,39 +134,40 @@ namespace Storage
                 bad = true;
             }
 
-            FileInfo file = new FileInfo(localPath);
-            
-            if (file.Exists)
-            {
-                File.Delete(localPath);
-            }
-            else if (Directory.Exists(localPath))
-            {
-                DirectoryInfo directoryInfo = new DirectoryInfo(localPath);
-                foreach (FileInfo fileInfo in directoryInfo.GetFiles())
-                {
-                    fileInfo.Delete();
-                }
-
-                foreach (DirectoryInfo dirInfo in directoryInfo.GetDirectories())
-                {
-                    dirInfo.Delete(true);
-                }
-
-                Directory.Delete(localPath);
-            }
             else
             {
-                bad = true;
-            }
+                FileInfo file = new FileInfo(localPath);
 
+                if (file.Exists)
+                {
+                    File.Delete(localPath);
+                }
+                else if (Directory.Exists(localPath))
+                {
+                    DirectoryInfo directoryInfo = new DirectoryInfo(localPath);
+                    foreach (FileInfo fileInfo in directoryInfo.GetFiles())
+                    {
+                        fileInfo.Delete();
+                    }
+
+                    foreach (DirectoryInfo dirInfo in directoryInfo.GetDirectories())
+                    {
+                        dirInfo.Delete(true);
+                    }
+
+                    Directory.Delete(localPath);
+                }
+                else
+                {
+                    bad = true;
+                }
+            }
             if (bad)
             {
                 httpResponse.StatusCode = 400;
                 using (var output = httpResponse.OutputStream)
                 {
-                    byte[] buffer = Encoding.ASCII.GetBytes("400 Bad Request");
-                    httpResponse.ContentLength64 = buffer.Length;
+                    byte[] buffer = Encoding.ASCII.GetBytes("400 Bad Request\n");
                     output.Write(buffer, 0, buffer.Length);
                 }
             }
@@ -179,36 +181,30 @@ namespace Storage
             bool bad = false;
 
             string localPath = folderPath + httpRequest.Url.LocalPath.Substring(1);
-            Console.WriteLine(localPath);
+            //Console.WriteLine(localPath);
             if (!CheckPath(localPath))
             {
                 bad = true;
             }
-
-            FileInfo fileToGetInfo = new FileInfo(localPath);
-            if (fileToGetInfo.Exists)
-            {
-                httpResponse.Headers.Add("Size: " + fileToGetInfo.Length);
-            }
             else
             {
-                bad = true;
+                FileInfo fileToGetInfo = new FileInfo(localPath);
+                if (fileToGetInfo.Exists)
+                {
+                    httpResponse.Headers.Add("Size: " + fileToGetInfo.Length);
+                }
+                else
+                {
+                    bad = true;
+                }
+
             }
-
-
             if (bad)
             {
-                httpResponse.StatusCode = 404;
-                using (var output = httpResponse.OutputStream)
-                {
-                    byte[] buffer = Encoding.ASCII.GetBytes("404 Not Found");
-                    httpResponse.ContentLength64 = buffer.Length;
-                    output.Write(buffer, 0, buffer.Length);
-                }
+                httpResponse.StatusCode = 400;
             }
 
             Console.WriteLine(httpResponse.StatusCode);
-
         }
 
         private static void ProcessCopy(HttpListenerRequest httpRequest, HttpListenerResponse httpResponse)
@@ -222,31 +218,31 @@ namespace Storage
             {
                 bad = true;
             }
-
-            FileInfo fileToGetInfo = new FileInfo(localPath);
-            if (fileToGetInfo.Exists && Directory.Exists(copyPath))
-            {
-                try
-                {
-                    File.Copy(localPath, copyPath + localPath.Substring(localPath.LastIndexOf("/") + 1), true);
-                }
-                catch
-                {
-                    bad |= true;
-                }
-            }
             else
             {
-                bad = true;
+                FileInfo fileToGetInfo = new FileInfo(localPath);
+                if (fileToGetInfo.Exists && Directory.Exists(copyPath))
+                {
+                    try
+                    {
+                        File.Copy(localPath, copyPath + localPath.Substring(localPath.LastIndexOf("/") + 1), false);
+                    }
+                    catch
+                    {
+                        bad |= true;
+                    }
+                }
+                else
+                {
+                    bad = true;
+                }
             }
-
-            if(bad)
+            if (bad)
             {
                 httpResponse.StatusCode = 400;
                 using (var output = httpResponse.OutputStream)
                 {
-                    byte[] buffer = Encoding.ASCII.GetBytes("400 Bad Request");
-                    httpResponse.ContentLength64 = buffer.Length;
+                    byte[] buffer = Encoding.ASCII.GetBytes("400 Bad Request\n");
                     output.Write(buffer, 0, buffer.Length);
                 }
             }
