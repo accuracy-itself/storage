@@ -299,6 +299,10 @@ namespace Storage
 
         public static void Main()
         {
+            if(!Directory.Exists(folderPath))
+            {
+                Directory.CreateDirectory(folderPath);
+            }
             Console.WriteLine("Welcome to my storage! (ready to handle requests)");
             HttpListener httpListener;
             httpListener = new HttpListener();
